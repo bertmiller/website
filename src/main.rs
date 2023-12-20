@@ -1,26 +1,46 @@
 use glob::glob;
 use pulldown_cmark::{Parser, html::push_html, Options};
-use std::fs;
 use notify::{Watcher, RecursiveMode, Result as notifyResult};
-use std::sync::mpsc::channel;
-use std::path::Path;
+use std::{
+    fs, env,
+    sync::mpsc::channel,
+    path::Path,
+};
 use chrono::NaiveDate;
+use dotenv::dotenv;
+
+fn create_files(md_files: Vec<String>, is_prod: bool, base_url: String, title: String){
+    clear_html_files();
+    create_html_files(md_files.clone(), is_prod, base_url.clone(), title.clone());
+    create_index_page(md_files, base_url, title);
+}
 
 fn main() -> notifyResult<()> {
-    clear_html_files();
+    dotenv().ok();
+    let args: Vec<String> = env::args().collect();
+    let is_prod = args.contains(&"--prod".to_string());
+    let current_dir = env::current_dir().expect("Failed to get current directory").to_string_lossy().to_string();
+    let title = env::var("TITLE").unwrap_or_else(|_| "Title".to_string());
+
+    let base_url = if is_prod {
+        env::var("BASE_URL").unwrap_or_else(|_| format!("{}/webpage", &current_dir))
+    } else {
+        format!("{}/webpage",&current_dir)
+    };
+
+    println!("Using base_url: {}", base_url);
+    println!("Using title: {}", title);
+
     let md_files = read_markdown_files("./data/");
-    create_html_files(md_files.clone());
-    create_index_page(md_files);
+    create_files(md_files.clone(), is_prod, base_url.clone(), title.clone());
+    
     let (_tx, rx) = channel::<String>();
 
     let mut watcher = notify::recommended_watcher(move |res| {
         match res {
             Ok(event) => {
                 println!("{:?}", event);
-                clear_html_files();
-                let md_files = read_markdown_files("./data/");
-                create_html_files(md_files.clone());
-                create_index_page(md_files);
+                create_files(md_files.clone(), is_prod, base_url.clone(), title.clone());
             },
             Err(e) => println!("watch error: {:?}", e),
         }
@@ -54,55 +74,69 @@ fn markdown_to_html(markdown: &str) -> String {
 }
 
 // Create HTML files from markdown files
-fn create_html_files(md_files: Vec<String>) {
+fn create_html_files(md_files: Vec<String>, is_prod: bool, base_url: String, title: String) {
+    println!("Creating HTML files");
+    let css_path = if is_prod {
+        "./main.css"
+    } else {
+        "../webpage/main.css"
+    };
     for md_file in md_files {
         let content = fs::read_to_string(&md_file).expect("Error reading file");
         let html_content = markdown_to_html(&content);
-        let html_content = create_html_template("../webpage/main.css", &html_content);
+        let html_content = create_html_template(css_path, &html_content, base_url.clone(), title.clone());
         let html_file = md_file.replace(".md", ".html");
         let html_file = html_file.replace("data/", "webpage/");
-        println!("Creating file: {}", html_file);
         fs::write(&html_file, html_content).expect("Error writing HTML file");
     }
 }
 
 // Create an index page
-fn create_index_page(md_files: Vec<String>) {
-    let mut index_content = String::from("<ul>");
+fn create_index_page(md_files: Vec<String>, base_url: String, title: String) {
+    println!("Creating index page");
+    let mut index_content = String::from("");
     let mut entries: Vec<(String, String, String)> = Vec::new();
 
     for md_file in &md_files {
-        let file_name = md_file.replace(".md", ".html");
-        let file_name = file_name.replace("data/", "");
+        if md_file == "data/about.md" {
+            continue;
+        }
+        let article_name = md_file.replace(".md", ".html")
+                                  .replace("data/", "");
+        let article_url = format!("{}/{}", base_url, article_name);
         let content = fs::read_to_string(&md_file).expect("Error reading file");
-        let first_line = content.lines().next().unwrap_or("");
-        let first_line = first_line.replace("#", "");
-        let second_line = content.lines().nth(1).unwrap_or("");
-        entries.push((file_name, first_line, second_line.to_string()));
+        let article_name = content.lines()
+                                    .next()
+                                    .unwrap_or("")
+                                    .replace("#", "");
+        let date = content.lines()
+                            .nth(1)
+                            .unwrap_or("")
+                            .to_string();
+        entries.push((article_url, article_name, date));
     }
 
     entries.sort_by(|(_, _, a), (_, _, b)| {
-        let date_a = NaiveDate::parse_from_str(a, "%m-%d-%Y").unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1));
-        let date_b = NaiveDate::parse_from_str(b, "%m-%d-%Y").unwrap_or_else(|_| NaiveDate::from_ymd(1970, 1, 1));
+        let date_a = NaiveDate::parse_from_str(a, "%m-%d-%Y").unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
+        let date_b = NaiveDate::parse_from_str(b, "%m-%d-%Y").unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
         date_b.cmp(&date_a)
     });
 
-    for (file_name, entry, date) in entries {
-        index_content.push_str(&format!("<li><a href=\"{}\">{}</a> - {}</li>", file_name, entry, date));
+    for (article_url, article_name, date) in entries {
+        index_content.push_str(&format!("<div class='post'><a href=\"{}\">{}</a> - {}</div>", article_url, article_name, date));
     }
 
-    index_content.push_str("</ul>");
-    index_content = create_html_template("./main.css", &index_content);
+    index_content = create_html_template("./main.css", &index_content, base_url, title);
     fs::write("./webpage/index.html", index_content).expect("Error writing index file");
 }
 
 // clear old HTML files
 fn clear_html_files() {
+    println!("Clearing old files");
     let pattern = "./webpage/*.html";
     for entry in glob(pattern).expect("Failed to read glob pattern") {
         match entry {
             Ok(path) => {
-                println!("Removing file: {}", path.display());
                 fs::remove_file(path).expect("Error removing file");
             },
             Err(e) => println!("{:?}", e),
@@ -110,7 +144,7 @@ fn clear_html_files() {
     }
 }
 
-fn create_html_template(css_path: &str, content: &str) -> String {
+fn create_html_template(css_path: &str, content: &str, base_url: String, title: String) -> String {    
     format!(
         r#"<!DOCTYPE html>
         <html>
@@ -119,14 +153,16 @@ fn create_html_template(css_path: &str, content: &str) -> String {
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
             <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;500;700&display=swap" rel="stylesheet">
-            <title>Robert Miller</title>
+            <title>{title}</title>
             <link rel="stylesheet" type="text/css" href="{css_path}">
         </head>
         <body>
             <header>
                 <nav>
                     <div class="nav-bar">
-                        <div class="nav-item"> <h3><a href="/">Robert Miller</a></h3> </div>
+                        <div class="nav-item"> <h3><a href="{base_url}">Robert Miller</a></h3></div>
+                        <div class="nav-item"> <a href="{base_url}">Writings</a></div>
+                        <div class="nav-item"> <a href="{about_url}">About</a></div>
                     </div>
                 </nav>
             </header>
@@ -135,7 +171,10 @@ fn create_html_template(css_path: &str, content: &str) -> String {
             </div>
         </body>
         </html>"#,
+        title = title,
         css_path = css_path,
-        content = content
+        content = content,
+        base_url = format!("{}{}",base_url, "/index.html"),
+        about_url = format!("{}{}",base_url, "/about.html"),
     )
 }
