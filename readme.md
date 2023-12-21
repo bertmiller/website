@@ -15,6 +15,8 @@ To build a website first:
 
 Currently it is configured to continuously run and listen to your `/data` folder for any updates to then regenerate all the pages. That allows for fast iteration on pages.
 
+There is special handling with the `about.md` file in the `/data` folder. This will not be indexed on the main page. Instead it will be generated as normal, but linked to on every page in the header.
+
 ## Configuration
 The project relies on a .env file with two variables:
 * `base_url` - the base url of the website, e.g. `https://example.com`
