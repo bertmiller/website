@@ -12,7 +12,7 @@ use dotenv::dotenv;
 fn create_files(md_files: Vec<String>, is_prod: bool, base_url: String, title: String){
     clear_html_files();
     create_html_files(md_files.clone(), is_prod, base_url.clone(), title.clone());
-    create_index_page(md_files, base_url, title);
+    create_index_page(md_files, base_url, title, is_prod);
 }
 
 fn main() -> notifyResult<()> {
@@ -70,7 +70,15 @@ fn markdown_to_html(markdown: &str) -> String {
     let parser = Parser::new_ext(markdown, Options::empty());
     let mut html_output = String::new();
     push_html(&mut html_output, parser);
-    html_output
+    let final_html_output = format!(
+        r#"
+        <div class="post-container">
+            {post_content}
+        </div>
+        "#,
+        post_content = html_output,
+    );
+    final_html_output
 }
 
 // Create HTML files from markdown files
@@ -92,13 +100,16 @@ fn create_html_files(md_files: Vec<String>, is_prod: bool, base_url: String, tit
 }
 
 // Create an index page
-fn create_index_page(md_files: Vec<String>, base_url: String, title: String) {
+fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_prod: bool) {
     println!("Creating index page");
     let mut index_content = String::from("");
     let mut entries: Vec<(String, String, String)> = Vec::new();
 
     for md_file in &md_files {
         if md_file == "data/about.md" {
+            continue;
+        }
+        if is_prod && md_file == "data/example.md" {
             continue;
         }
         let article_name = md_file.replace(".md", ".html")
@@ -123,7 +134,7 @@ fn create_index_page(md_files: Vec<String>, base_url: String, title: String) {
     });
 
     for (article_url, article_name, date) in entries {
-        index_content.push_str(&format!("<div class='post'><a href=\"{}\">{}</a> - {}</div>", article_url, article_name, date));
+        index_content.push_str(&format!("<div class='post'>{} - <a href=\"{}\">{}</a></div>", date, article_url, article_name));
     }
 
     index_content = create_html_template("./main.css", &index_content, base_url, title);
@@ -161,7 +172,7 @@ fn create_html_template(css_path: &str, content: &str, base_url: String, title: 
                 <nav>
                     <div class="nav-bar">
                         <div class="nav-item"> <h3><a href="{base_url}">Robert Miller</a></h3></div>
-                        <div class="nav-item"> <a href="{base_url}">Writings</a></div>
+                        <div class="nav-item"> <a href="{base_url}">Writing</a></div>
                         <div class="nav-item"> <a href="{about_url}">About</a></div>
                     </div>
                 </nav>
