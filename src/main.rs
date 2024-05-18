@@ -92,7 +92,7 @@ fn create_html_files(md_files: Vec<String>, is_prod: bool, base_url: String, tit
     for md_file in md_files {
         let content = fs::read_to_string(&md_file).expect("Error reading file");
         let html_content = markdown_to_html(&content);
-        let html_content = create_html_template(css_path, &html_content, base_url.clone(), title.clone());
+        let html_content = create_html_template(css_path, &html_content, base_url.clone(), title.clone(), false);
         let html_file = md_file.replace(".md", ".html");
         let html_file = html_file.replace("data/", "webpage/");
         fs::write(&html_file, html_content).expect("Error writing HTML file");
@@ -137,7 +137,7 @@ fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_
         index_content.push_str(&format!("<div class='post'>{} - <a href=\"{}\">{}</a></div>", date, article_url, article_name));
     }
 
-    index_content = create_html_template("./main.css", &index_content, base_url, title);
+    index_content = create_html_template("./main.css", &index_content, base_url, title, true);
     fs::write("./webpage/index.html", index_content).expect("Error writing index file");
 }
 
@@ -155,7 +155,12 @@ fn clear_html_files() {
     }
 }
 
-fn create_html_template(css_path: &str, content: &str, base_url: String, title: String) -> String {    
+fn create_html_template(css_path: &str, content: &str, base_url: String, title: String, index: bool) -> String {
+    let container = if index {
+        "index-container"
+    } else {
+        "container"
+    };
     format!(
         r#"<!DOCTYPE html>
         <html>
@@ -177,7 +182,7 @@ fn create_html_template(css_path: &str, content: &str, base_url: String, title: 
                     </div>
                 </nav>
             </header>
-            <div class="container">
+            <div class="{container}">
                 {content}
             </div>
         </body>
@@ -187,5 +192,6 @@ fn create_html_template(css_path: &str, content: &str, base_url: String, title: 
         content = content,
         base_url = format!("{}{}",base_url, "/index.html"),
         about_url = format!("{}{}",base_url, "/about.html"),
+        container = container
     )
 }
