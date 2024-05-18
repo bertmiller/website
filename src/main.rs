@@ -6,6 +6,7 @@ use std::{
     sync::mpsc::channel,
     path::Path,
 };
+use std::fs::create_dir_all;
 use chrono::NaiveDate;
 use dotenv::dotenv;
 
@@ -66,19 +67,65 @@ fn read_markdown_files(folder: &str) -> Vec<String> {
 }
 
 // Convert markdown to HTML
-fn markdown_to_html(markdown: &str) -> String {
+fn markdown_to_html(markdown: &str, md_file: &str) -> String {
     let parser = Parser::new_ext(markdown, Options::empty());
     let mut html_output = String::new();
     push_html(&mut html_output, parser);
+
+    // Add cover image if exists
+    let cover_image_html = get_cover_image_html(md_file);
     let final_html_output = format!(
         r#"
         <div class="post-container">
+            {cover_image}
             {post_content}
         </div>
         "#,
+        cover_image = cover_image_html,
         post_content = html_output,
     );
     final_html_output
+}
+
+// Helper function to move the image to the ./webpage/images/ directory
+fn move_image_to_webpage(image_path: &str) {
+    let target_dir = "./webpage/images/";
+    create_dir_all(target_dir).expect("Failed to create target directory");
+    let image_filename = Path::new(image_path).file_name().unwrap().to_str().unwrap();
+    let target_path = format!("{}{}", target_dir, image_filename);
+
+    if !Path::new(&target_path).exists() {
+        fs::copy(image_path, &target_path).expect("Failed to copy image file");
+    }
+}
+
+// Helper function to get the cover image HTML
+fn get_cover_image_html(md_file: &str) -> String {
+    let base_filename = Path::new(md_file).file_stem().unwrap().to_str().unwrap();
+    let extensions = ["jpg", "jpeg", "png", "gif"];
+    for ext in &extensions {
+        let image_path = format!("./images/{}.{}", base_filename, ext);
+        if Path::new(&image_path).exists() {
+            move_image_to_webpage(&image_path);
+            return format!(r#"<img class="cover-image" src="{}" alt="Cover Image">"#, image_path);
+        }
+    }
+    String::new()
+}
+
+// Helper function to get the thumbnail meta tag and move the image
+fn get_thumbnail_meta_tag(md_file: &str, base_url: &str) -> String {
+    let base_filename = Path::new(md_file).file_stem().unwrap().to_str().unwrap();
+    let extensions = ["jpg", "jpeg", "png", "gif"];
+    for ext in &extensions {
+        let image_path = format!("./images/{}.{}", base_filename, ext);
+        if Path::new(&image_path).exists() {
+            let target_path = move_image_to_webpage(&image_path);
+            let image_url = format!("{}/{}", base_url, target_path.replace("./webpage/", ""));
+            return format!(r#"<meta property="og:image" content="{}" />"#, image_url);
+        }
+    }
+    String::new()
 }
 
 // Create HTML files from markdown files
@@ -91,7 +138,7 @@ fn create_html_files(md_files: Vec<String>, is_prod: bool, base_url: String, tit
     };
     for md_file in md_files {
         let content = fs::read_to_string(&md_file).expect("Error reading file");
-        let html_content = markdown_to_html(&content);
+        let html_content = markdown_to_html(&content, &md_file);
         let html_content = create_html_template(css_path, &html_content, base_url.clone(), title.clone(), false);
         let html_file = md_file.replace(".md", ".html");
         let html_file = html_file.replace("data/", "webpage/");
@@ -103,7 +150,7 @@ fn create_html_files(md_files: Vec<String>, is_prod: bool, base_url: String, tit
 fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_prod: bool) {
     println!("Creating index page");
     let mut index_content = String::from("");
-    let mut entries: Vec<(String, String, String)> = Vec::new();
+    let mut entries: Vec<(String, String, String, String)> = Vec::new();
 
     for md_file in &md_files {
         if md_file == "data/about.md" {
@@ -124,21 +171,42 @@ fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_
                             .nth(1)
                             .unwrap_or("")
                             .to_string();
-        entries.push((article_url, article_name, date));
+        let thumbnail = get_thumbnail_html(md_file);
+        entries.push((article_url, article_name, date, thumbnail));
     }
 
-    entries.sort_by(|(_, _, a), (_, _, b)| {
+    entries.sort_by(|(_, _, a, _), (_, _, b, _)| {
         let date_a = NaiveDate::parse_from_str(a, "%m-%d-%Y").unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
         let date_b = NaiveDate::parse_from_str(b, "%m-%d-%Y").unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
         date_b.cmp(&date_a)
     });
 
-    for (article_url, article_name, date) in entries {
-        index_content.push_str(&format!("<div class='post'>{} - <a href=\"{}\">{}</a></div>", date, article_url, article_name));
+    for (article_url, article_name, date, thumbnail) in entries {
+        index_content.push_str(&format!(
+            r#"<div class='post'>
+                {date} - <a href="{}">{}</a>
+            </div>"#, 
+            article_url, 
+            article_name,
+            date = date,
+        ));
     }
 
     index_content = create_html_template("./main.css", &index_content, base_url, title, true);
     fs::write("./webpage/index.html", index_content).expect("Error writing index file");
+}
+
+// Helper function to get the thumbnail HTML
+fn get_thumbnail_html(md_file: &str) -> String {
+    let base_filename = Path::new(md_file).file_stem().unwrap().to_str().unwrap();
+    let extensions = ["jpg", "jpeg", "png", "gif"];
+    for ext in &extensions {
+        let image_path = format!("./images/{}.{}", base_filename, ext);
+        if Path::new(&image_path).exists() {
+            return format!(r#"<img class="thumbnail" src="{}" alt="Thumbnail">"#, image_path.replace("./images", "./webpage/images"));
+        }
+    }
+    String::new()
 }
 
 // clear old HTML files
