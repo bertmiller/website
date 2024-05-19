@@ -114,14 +114,15 @@ fn get_cover_image_html(md_file: &str) -> String {
 }
 
 // Helper function to get the thumbnail meta tag and move the image
-fn get_thumbnail_meta_tag(md_file: &str) -> String {
+fn get_thumbnail_meta_tag(md_file: &str, base_url: &String) -> String {
     let base_filename = Path::new(md_file).file_stem().unwrap().to_str().unwrap();
     let extensions = ["jpg", "jpeg", "png", "gif"];
     for ext in &extensions {
         let image_path = format!("./images/{}.{}", base_filename, ext);
         if Path::new(&image_path).exists() {
             move_image_to_webpage(&image_path);
-            return format!(r#"<meta property="og:image" content="{}"/>"#, image_path);
+            let thumbnail_url = format!("{}/{}", base_url, image_path.replace("./",""));
+            return format!(r#"<meta property="og:image" content="{}"/>"#, thumbnail_url);
         }
     }
     String::new()
@@ -215,7 +216,7 @@ fn create_html_template(css_path: &str, content: &str, base_url: String, title: 
         "container"
     };
     let thumbnail_meta_tag = if !index {
-        get_thumbnail_meta_tag(md_file)
+        get_thumbnail_meta_tag(md_file, &base_url)
     } else {
         String::new()
     };
