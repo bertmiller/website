@@ -14,6 +14,7 @@ pub struct Config {
 const DEFAULT_DATA_DIR: &str = "./data/";
 const DEFAULT_WEB_PAGE_DIR: &str = "./webpage/";
 const DEFAULT_IMAGES_DIR: &str = "images/";
+const DEFAULT_TITLE: &str = "Title";
 
 impl Config {
     pub fn new() -> Result<Self, Box<dyn std::error::Error>> {
@@ -21,7 +22,7 @@ impl Config {
         let args: Vec<String> = env::args().collect();
         let is_prod = args.contains(&"--prod".to_string());
         let current_dir = env::current_dir()?.to_string_lossy().to_string();
-        let title = env::var("TITLE").unwrap_or_else(|_| "Title".to_string());
+        let title = env::var("TITLE").unwrap_or_else(|_| DEFAULT_TITLE.to_string());
 
         let base_url = if is_prod {
             env::var("BASE_URL").unwrap_or_else(|_| format!("{}/webpage", &current_dir))
@@ -29,16 +30,25 @@ impl Config {
             format!("{}/webpage", &current_dir)
         };
 
+        let data_dir = env::var("DATA_DIR").unwrap_or_else(|_| DEFAULT_DATA_DIR.to_string());
+        let webpage_dir =
+            env::var("WEBPAGE_DIR").unwrap_or_else(|_| DEFAULT_WEB_PAGE_DIR.to_string());
+        let images_dir = env::var("IMAGES_DIR")
+            .unwrap_or_else(|_| format!("{}{}", webpage_dir, DEFAULT_IMAGES_DIR));
+
         println!("Using base_url: {}", base_url);
         println!("Using title: {}", title);
+        println!("Using data_dir: {}", data_dir);
+        println!("Using webpage_dir: {}", webpage_dir);
+        println!("Using images_dir: {}", images_dir);
 
         Ok(Config {
             is_prod,
             base_url,
             title,
-            data_dir: DEFAULT_DATA_DIR.into(),
-            webpage_dir: DEFAULT_WEB_PAGE_DIR.into(),
-            images_dir: format!("{}{}", DEFAULT_WEB_PAGE_DIR, DEFAULT_IMAGES_DIR),
+            data_dir,
+            webpage_dir,
+            images_dir,
         })
     }
 

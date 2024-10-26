@@ -25,7 +25,7 @@ pub fn markdown_to_html(markdown: &str, md_file: &str, config: &Config) -> Strin
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
     let parser = Parser::new_ext(&content, options);
-    let mut html_output = String::new();
+    let mut html_output = String::new();    
     push_html(&mut html_output, parser);
 
     // Add cover image if exists
@@ -78,16 +78,29 @@ pub fn create_blog_posts(config: &Config, md_files: Vec<String>) {
 // Create an index page
 pub fn create_index_page(config: &Config, md_files: Vec<String>) {
     println!("Creating index page");
-    let mut index_content = String::from("");
+    let mut index_content = String::new();
     let mut entries: Vec<(String, String, String)> = Vec::new();
 
     for md_file in &md_files {
-        if md_file == "data/about.md" || md_file == "data/newsletter.md" {
+        println!("md_file: {}", md_file);
+        let about_path = format!("{}about.md", config.data_dir);
+        let newsletter_path = format!("{}newsletter.md", config.data_dir);
+        let example_path = format!("{}example.md", config.data_dir);
+        
+        // Remove "./" from the beginning of the paths if present
+        let md_file = md_file.strip_prefix("./").unwrap_or(md_file);
+        let about_path = about_path.strip_prefix("./").unwrap_or(&about_path);
+        let newsletter_path = newsletter_path.strip_prefix("./").unwrap_or(&newsletter_path);
+        let example_path = example_path.strip_prefix("./").unwrap_or(&example_path);
+        
+        println!("about_path: {}", about_path);
+        if md_file == about_path || md_file == newsletter_path {
             continue;
         }
-        if config.is_prod && md_file == "data/example.md" {
+        if config.is_prod && md_file == example_path {
             continue;
         }
+
         let article_name = md_file.replace(".md", ".html").replace("data/", "");
         let article_url = format!("{}/{}", config.base_url, article_name);
         let content = fs::read_to_string(&md_file).expect("Error reading file");
@@ -117,7 +130,8 @@ pub fn create_index_page(config: &Config, md_files: Vec<String>) {
     }
 
     let index_content = create_html_template(config, &index_content, true, "");
-    fs::write("./webpage/index.html", index_content).expect("Error writing index file");
+    let index_file_path = format!("{}/index.html", config.webpage_dir);
+    fs::write(&index_file_path, index_content).expect("Error writing index file");
 }
 
 fn create_html_template(config: &Config, content: &str, index: bool, md_file: &str) -> String {
