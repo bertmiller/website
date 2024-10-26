@@ -1,50 +1,42 @@
+mod config;
+
 use chrono::NaiveDate;
-use dotenv::dotenv;
+use config::Config;
+
 use glob::glob;
-use notify::{RecursiveMode, Result as notifyResult, Watcher};
+use notify::{RecursiveMode, Watcher};
 use pulldown_cmark::{html::push_html, Options, Parser};
 use std::fs::create_dir_all;
-use std::{env, fs, path::Path, sync::mpsc::channel};
+use std::{fs, path::Path, sync::mpsc::channel};
 
-fn create_files(md_files: Vec<String>, is_prod: bool, base_url: String, title: String) {
-    clear_html_files();
-    create_html_files(md_files.clone(), is_prod, base_url.clone(), title.clone());
-    create_index_page(md_files, base_url, title, is_prod);
+fn create_files(config: &Config, md_files: Vec<String>) {
+    clear_html_files(&config.webpage_dir);
+    create_html_files(config, md_files.clone());
+    create_index_page(config, md_files);
 }
 
-fn main() -> notifyResult<()> {
-    dotenv().ok();
-    let args: Vec<String> = env::args().collect();
-    let is_prod = args.contains(&"--prod".to_string());
-    let current_dir = env::current_dir()
-        .expect("Failed to get current directory")
-        .to_string_lossy()
-        .to_string();
-    let title = env::var("TITLE").unwrap_or_else(|_| "Title".to_string());
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let config = Config::new()?;
 
-    let base_url = if is_prod {
-        env::var("BASE_URL").unwrap_or_else(|_| format!("{}/webpage", &current_dir))
-    } else {
-        format!("{}/webpage", &current_dir)
-    };
+    println!("Using base_url: {}", config.base_url);
+    println!("Using title: {}", config.title);
 
-    println!("Using base_url: {}", base_url);
-    println!("Using title: {}", title);
-
-    let md_files = read_markdown_files("./data/");
-    create_files(md_files.clone(), is_prod, base_url.clone(), title.clone());
+    let md_files = read_markdown_files(&config.data_dir);
+    create_files(&config, md_files.clone());
 
     let (_tx, rx) = channel::<String>();
 
+    let config_clone = config.clone();
     let mut watcher = notify::recommended_watcher(move |res| match res {
         Ok(event) => {
             println!("{:?}", event);
-            create_files(md_files.clone(), is_prod, base_url.clone(), title.clone());
+            let md_files = read_markdown_files(&config_clone.data_dir);
+            create_files(&config_clone, md_files);
         }
         Err(e) => println!("watch error: {:?}", e),
     })?;
 
-    watcher.watch(Path::new("./data/"), RecursiveMode::Recursive)?;
+    watcher.watch(Path::new(&config.data_dir), RecursiveMode::Recursive)?;
 
     loop {
         match rx.recv() {
@@ -65,7 +57,7 @@ fn read_markdown_files(folder: &str) -> Vec<String> {
 }
 
 // Convert markdown to HTML
-fn markdown_to_html(markdown: &str, md_file: &str) -> String {
+fn markdown_to_html(markdown: &str, md_file: &str, config: &Config) -> String {
     // Extract the title (first h2) and date (second line)
     let mut lines = markdown.lines();
     let title = lines
@@ -88,7 +80,7 @@ fn markdown_to_html(markdown: &str, md_file: &str) -> String {
     push_html(&mut html_output, parser);
 
     // Add cover image if exists
-    let cover_image_html = get_cover_image_html(md_file);
+    let cover_image_html = get_cover_image_html(md_file, &config.images_dir);
     let final_html_output = format!(
         r#"
         <div class="post-container">
@@ -110,11 +102,11 @@ fn markdown_to_html(markdown: &str, md_file: &str) -> String {
 }
 
 // Helper function to move the image to the ./webpage/images/ directory
-fn move_image_to_webpage(image_path: &str) {
-    let target_dir = "./webpage/images/";
-    create_dir_all(target_dir).expect("Failed to create target directory");
+fn move_image_to_webpage(image_path: &str, images_dir: &str) {
+    // let target_dir = "./webpage/images/";
+    create_dir_all(images_dir).expect("Failed to create target directory");
     let image_filename = Path::new(image_path).file_name().unwrap().to_str().unwrap();
-    let target_path = format!("{}{}", target_dir, image_filename);
+    let target_path = format!("{}{}", images_dir, image_filename);
 
     if !Path::new(&target_path).exists() {
         fs::copy(image_path, &target_path).expect("Failed to copy image file");
@@ -122,13 +114,13 @@ fn move_image_to_webpage(image_path: &str) {
 }
 
 // Helper function to get the cover image HTML
-fn get_cover_image_html(md_file: &str) -> String {
+fn get_cover_image_html(md_file: &str, images_dir: &str) -> String {
     let base_filename = Path::new(md_file).file_stem().unwrap().to_str().unwrap();
     let extensions = ["jpg", "jpeg", "png", "gif"];
     for ext in &extensions {
         let image_path = format!("./images/{}.{}", base_filename, ext);
         if Path::new(&image_path).exists() {
-            move_image_to_webpage(&image_path);
+            move_image_to_webpage(&image_path, &images_dir);
             return format!(
                 r#"<img class="cover-image" src="{}" alt="Cover Image">"#,
                 image_path
@@ -139,13 +131,13 @@ fn get_cover_image_html(md_file: &str) -> String {
 }
 
 // Helper function to get the thumbnail meta tag and move the image
-fn get_thumbnail_meta_tag(md_file: &str, base_url: &String) -> String {
+fn get_thumbnail_meta_tag(md_file: &str, base_url: &String, images_dir: &str) -> String {
     let base_filename = Path::new(md_file).file_stem().unwrap().to_str().unwrap();
     let extensions = ["jpg", "jpeg", "png", "gif"];
     for ext in &extensions {
         let image_path = format!("./images/{}.{}", base_filename, ext);
         if Path::new(&image_path).exists() {
-            move_image_to_webpage(&image_path);
+            move_image_to_webpage(&image_path, &images_dir);
             let thumbnail_url = format!("{}/{}", base_url, image_path.replace("./", ""));
             return format!(r#"<meta property="og:image" content="{}"/>"#, thumbnail_url);
         }
@@ -154,38 +146,19 @@ fn get_thumbnail_meta_tag(md_file: &str, base_url: &String) -> String {
 }
 
 // Create HTML files from markdown files
-fn create_html_files(md_files: Vec<String>, is_prod: bool, base_url: String, title: String) {
+fn create_html_files(config: &Config, md_files: Vec<String>) {
     println!("Creating HTML files");
-    let css_path = if is_prod {
-        "./main.css"
-    } else {
-        "../webpage/main.css"
-    };
-    let mobile_css_path = if is_prod {
-        "./mobile.css"
-    } else {
-        "../webpage/mobile.css"
-    };
     for md_file in md_files {
         let content = fs::read_to_string(&md_file).expect("Error reading file");
-        let html_content = markdown_to_html(&content, &md_file);
-        let html_content = create_html_template(
-            css_path,
-            mobile_css_path,
-            &html_content,
-            base_url.clone(),
-            title.clone(),
-            false,
-            &md_file,
-        );
-        let html_file = md_file.replace(".md", ".html");
-        let html_file = html_file.replace("data/", "webpage/");
+        let html_content = markdown_to_html(&content, &md_file, &config);
+        let html_content = create_html_template(config, &html_content, false, &md_file);
+        let html_file = md_file.replace(".md", ".html").replace("data/", "webpage/");
         fs::write(&html_file, html_content).expect("Error writing HTML file");
     }
 }
 
 // Create an index page
-fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_prod: bool) {
+fn create_index_page(config: &Config, md_files: Vec<String>) {
     println!("Creating index page");
     let mut index_content = String::from("");
     let mut entries: Vec<(String, String, String)> = Vec::new();
@@ -194,11 +167,11 @@ fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_
         if md_file == "data/about.md" || md_file == "data/newsletter.md" {
             continue;
         }
-        if is_prod && md_file == "data/example.md" {
+        if config.is_prod && md_file == "data/example.md" {
             continue;
         }
         let article_name = md_file.replace(".md", ".html").replace("data/", "");
-        let article_url = format!("{}/{}", base_url, article_name);
+        let article_url = format!("{}/{}", config.base_url, article_name);
         let content = fs::read_to_string(&md_file).expect("Error reading file");
         let article_name = content.lines().next().unwrap_or("").replace("#", "");
         let date = content.lines().nth(1).unwrap_or("").to_string();
@@ -225,33 +198,15 @@ fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_
         ));
     }
 
-    let css_path = if is_prod {
-        "./main.css"
-    } else {
-        "../webpage/main.css"
-    };
-    let mobile_css_path = if is_prod {
-        "./mobile.css"
-    } else {
-        "../webpage/mobile.css"
-    };
-    index_content = create_html_template(
-        css_path,
-        mobile_css_path,
-        &index_content,
-        base_url,
-        title,
-        true,
-        "",
-    );
+    let index_content = create_html_template(config, &index_content, true, "");
     fs::write("./webpage/index.html", index_content).expect("Error writing index file");
 }
 
 // clear old HTML files
-fn clear_html_files() {
+fn clear_html_files(webpage_dir: &str) {
     println!("Clearing old files");
-    let pattern = "./webpage/*.html";
-    for entry in glob(pattern).expect("Failed to read glob pattern") {
+    let pattern = format!("{}/*.html", webpage_dir);
+    for entry in glob(&pattern).expect("Failed to read glob pattern") {
         match entry {
             Ok(path) => {
                 fs::remove_file(path).expect("Error removing file");
@@ -261,25 +216,18 @@ fn clear_html_files() {
     }
 }
 
-fn create_html_template(
-    css_path: &str,
-    mobile_css_path: &str,
-    content: &str,
-    base_url: String,
-    title: String,
-    index: bool,
-    md_file: &str,
-) -> String {
+fn create_html_template(config: &Config, content: &str, index: bool, md_file: &str) -> String {
     let container = if index {
         "index-container"
     } else {
         "container"
     };
     let thumbnail_meta_tag = if !index {
-        get_thumbnail_meta_tag(md_file, &base_url)
+        get_thumbnail_meta_tag(md_file, &config.base_url, &config.images_dir)
     } else {
         String::new()
     };
+
     format!(
         r#"<!DOCTYPE html>
         <html lang="en">
@@ -310,14 +258,14 @@ fn create_html_template(
             </div>
         </body>
         </html>"#,
-        title = title,
-        css_path = css_path,
+        title = config.title,
+        css_path = config.css_path(),
+        mobile_css_path = config.mobile_css_path(),
         content = content,
-        base_url = format!("{}{}", base_url, "/index.html"),
-        about_url = format!("{}{}", base_url, "/about.html"),
-        newsletter_url = format!("{}{}", base_url, "/newsletter.html"),
+        base_url = format!("{}{}", config.base_url, "/index.html"),
+        about_url = format!("{}{}", config.base_url, "/about.html"),
+        newsletter_url = format!("{}{}", config.base_url, "/newsletter.html"),
         container = container,
         thumbnail_meta_tag = thumbnail_meta_tag,
-        mobile_css_path = mobile_css_path,
     )
 }
