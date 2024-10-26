@@ -1,0 +1,132 @@
+@font-face {
+    font-family: 'Berkeley Mono';
+    src: url('./fonts/BerkeleyMonoVariable-Regular.woff2') format('woff2-variations');
+    font-weight: 100 150; /* Range of weights supported */
+    font-style: normal;
+}
+
+.post {
+    display: flex;
+    margin-bottom: 10px;
+    font-family: 'Berkeley Mono';
+    max-width: 80%;
+}
+
+.post-date {
+    flex: 0 0 150px;
+}
+
+.post-title {
+    flex: 1;
+}
+
+body {
+    background-color: white;
+    color: black;
+    font-family: IBM Plex Sans, sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    font-size: 20px;
+    font-weight: 100;
+    padding-bottom: 50px;
+}
+
+.index-container {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    padding-left: 10rem;
+    padding-right: 10rem;
+    max-width: 1000px;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    padding-left: 10rem;
+    padding-right: 10rem;
+    margin: 0 auto;
+    max-width: 750px;
+}
+
+.post-container {
+    max-width: 100%;
+}
+
+b {
+    font-weight: 150;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: black;
+    margin-bottom: 0;
+    margin-top: 5;
+    font-family: 'Berkeley Mono';
+}
+
+h3 {
+    font-weight: 130;
+}
+
+img {
+    max-width: 50%;
+    height: auto;
+}
+
+a {
+    color: #000000;
+    text-decoration: none;
+    border-bottom-style: solid;
+    border-color: lightgray;
+    border-width: 2px;
+}
+
+a:hover, a:visited, a:link, a:active {
+    text-decoration: none;
+}
+
+p {
+    margin-bottom: 0;
+}
+
+blockquote {
+    border-left: 5px solid #eee;
+    margin: 10px 0;
+    padding: 0.25em 10px;
+}
+
+blockquote p {
+    margin-top: 0;
+}
+
+.nav-bar {
+    margin-bottom: 1.5rem;
+    flex-direction: row;
+    display: flex;
+    font-family: 'Berkeley Mono';
+}
+
+.nav-item {
+    margin-right: 3.5rem;
+    padding: 1.5rem;
+    color:#c5c5c5;
+    align-items: center;
+    display: flex;
+    justify-content: center;
+}
+
+.nav-item a {
+    color: #000000 !important;
+}
+
+.nav-item h3 {
+    margin-top: 0;
+}
+
+a:hover {
+    color: grey;
+    text-decoration: none;
+}

@@ -153,7 +153,7 @@ fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_
     let mut entries: Vec<(String, String, String)> = Vec::new();
 
     for md_file in &md_files {
-        if md_file == "data/about.md" {
+        if md_file == "data/about.md" || md_file == "data/newsletter.md" {
             continue;
         }
         if is_prod && md_file == "data/example.md" {
@@ -183,7 +183,8 @@ fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_
     for (article_url, article_name, date) in entries {
         index_content.push_str(&format!(
             r#"<div class='post'>
-                {date} - <a href="{}">{}</a>
+                <span class="post-date">{date} - </span>
+                <span class="post-title"><a href="{}">{}</a></span>
             </div>"#, 
             article_url, 
             article_name,
@@ -238,6 +239,7 @@ fn create_html_template(css_path: &str, content: &str, base_url: String, title: 
                     <div class="nav-bar">
                         <div class="nav-item"> <h3><a href="{base_url}">Robert Miller</a></h3></div>
                         <div class="nav-item"> <a href="{base_url}">Writing</a></div>
+                        <div class="nav-item"> <a href="{newsletter_url}">Newsletter</a></div>
                         <div class="nav-item"> <a href="{about_url}">About</a></div>
                     </div>
                 </nav>
@@ -252,6 +254,7 @@ fn create_html_template(css_path: &str, content: &str, base_url: String, title: 
         content = content,
         base_url = format!("{}{}",base_url, "/index.html"),
         about_url = format!("{}{}",base_url, "/about.html"),
+        newsletter_url = format!("{}{}",base_url, "/newsletter.html"),
         container = container,
         thumbnail_meta_tag = thumbnail_meta_tag,
     )

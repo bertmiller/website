@@ -1,4 +1,6 @@
 /target
 /data/
+/data/about.md
 /webpage/
 /images
+/.vscode
