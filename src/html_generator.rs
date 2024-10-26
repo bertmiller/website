@@ -82,7 +82,6 @@ pub fn create_index_page(config: &Config, md_files: Vec<String>) {
     let mut entries: Vec<(String, String, String)> = Vec::new();
 
     for md_file in &md_files {
-        println!("md_file: {}", md_file);
         let about_path = format!("{}about.md", config.data_dir);
         let newsletter_path = format!("{}newsletter.md", config.data_dir);
         let example_path = format!("{}example.md", config.data_dir);
@@ -93,7 +92,6 @@ pub fn create_index_page(config: &Config, md_files: Vec<String>) {
         let newsletter_path = newsletter_path.strip_prefix("./").unwrap_or(&newsletter_path);
         let example_path = example_path.strip_prefix("./").unwrap_or(&example_path);
         
-        println!("about_path: {}", about_path);
         if md_file == about_path || md_file == newsletter_path {
             continue;
         }
