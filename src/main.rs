@@ -68,7 +68,19 @@ fn read_markdown_files(folder: &str) -> Vec<String> {
 
 // Convert markdown to HTML
 fn markdown_to_html(markdown: &str, md_file: &str) -> String {
-    let parser = Parser::new_ext(markdown, Options::empty());
+    // Extract the title (first h2) and date (second line)
+    let mut lines = markdown.lines();
+    let title = lines.next().unwrap_or("").trim_start_matches("## ").to_string();
+    let date = lines.next().unwrap_or("").to_string();
+
+    // Skip any empty lines after the date
+    let content = lines.skip_while(|line| line.trim().is_empty())
+                       .collect::<Vec<&str>>()
+                       .join("\n");
+
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    let parser = Parser::new_ext(&content, options);
     let mut html_output = String::new();
     push_html(&mut html_output, parser);
 
@@ -78,10 +90,17 @@ fn markdown_to_html(markdown: &str, md_file: &str) -> String {
         r#"
         <div class="post-container">
             {cover_image}
-            {post_content}
+            <h2>{title}</h2>
+            <div class="post-title-separator"></div>
+            <span class="post-date">{date}</span>
+            <div class="post-content">
+                {post_content}
+            </div>
         </div>
         "#,
         cover_image = cover_image_html,
+        title = title,
+        date = date,
         post_content = html_output,
     );
     final_html_output
@@ -183,8 +202,8 @@ fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_
     for (article_url, article_name, date) in entries {
         index_content.push_str(&format!(
             r#"<div class='post'>
-                <span class="post-date">{date} - </span>
-                <span class="post-title"><a href="{}">{}</a></span>
+                <span class="index-date">{date}</span>
+                <span class="index-post-title"><a href="{}">{}</a></span>
             </div>"#, 
             article_url, 
             article_name,
