@@ -1,16 +1,12 @@
-use glob::glob;
-use pulldown_cmark::{Parser, html::push_html, Options};
-use notify::{Watcher, RecursiveMode, Result as notifyResult};
-use std::{
-    fs, env,
-    sync::mpsc::channel,
-    path::Path,
-};
-use std::fs::create_dir_all;
 use chrono::NaiveDate;
 use dotenv::dotenv;
+use glob::glob;
+use notify::{RecursiveMode, Result as notifyResult, Watcher};
+use pulldown_cmark::{html::push_html, Options, Parser};
+use std::fs::create_dir_all;
+use std::{env, fs, path::Path, sync::mpsc::channel};
 
-fn create_files(md_files: Vec<String>, is_prod: bool, base_url: String, title: String){
+fn create_files(md_files: Vec<String>, is_prod: bool, base_url: String, title: String) {
     clear_html_files();
     create_html_files(md_files.clone(), is_prod, base_url.clone(), title.clone());
     create_index_page(md_files, base_url, title, is_prod);
@@ -20,13 +16,16 @@ fn main() -> notifyResult<()> {
     dotenv().ok();
     let args: Vec<String> = env::args().collect();
     let is_prod = args.contains(&"--prod".to_string());
-    let current_dir = env::current_dir().expect("Failed to get current directory").to_string_lossy().to_string();
+    let current_dir = env::current_dir()
+        .expect("Failed to get current directory")
+        .to_string_lossy()
+        .to_string();
     let title = env::var("TITLE").unwrap_or_else(|_| "Title".to_string());
 
     let base_url = if is_prod {
         env::var("BASE_URL").unwrap_or_else(|_| format!("{}/webpage", &current_dir))
     } else {
-        format!("{}/webpage",&current_dir)
+        format!("{}/webpage", &current_dir)
     };
 
     println!("Using base_url: {}", base_url);
@@ -34,24 +33,22 @@ fn main() -> notifyResult<()> {
 
     let md_files = read_markdown_files("./data/");
     create_files(md_files.clone(), is_prod, base_url.clone(), title.clone());
-    
+
     let (_tx, rx) = channel::<String>();
 
-    let mut watcher = notify::recommended_watcher(move |res| {
-        match res {
-            Ok(event) => {
-                println!("{:?}", event);
-                create_files(md_files.clone(), is_prod, base_url.clone(), title.clone());
-            },
-            Err(e) => println!("watch error: {:?}", e),
+    let mut watcher = notify::recommended_watcher(move |res| match res {
+        Ok(event) => {
+            println!("{:?}", event);
+            create_files(md_files.clone(), is_prod, base_url.clone(), title.clone());
         }
+        Err(e) => println!("watch error: {:?}", e),
     })?;
 
     watcher.watch(Path::new("./data/"), RecursiveMode::Recursive)?;
 
     loop {
         match rx.recv() {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => println!("watch receive error: {:?}", e),
         }
     }
@@ -60,7 +57,8 @@ fn main() -> notifyResult<()> {
 // Read markdown files from a folder
 fn read_markdown_files(folder: &str) -> Vec<String> {
     let pattern = format!("{}/*.md", folder);
-    glob(&pattern).expect("Failed to read glob pattern")
+    glob(&pattern)
+        .expect("Failed to read glob pattern")
         .filter_map(Result::ok)
         .map(|path| path.display().to_string())
         .collect()
@@ -70,13 +68,18 @@ fn read_markdown_files(folder: &str) -> Vec<String> {
 fn markdown_to_html(markdown: &str, md_file: &str) -> String {
     // Extract the title (first h2) and date (second line)
     let mut lines = markdown.lines();
-    let title = lines.next().unwrap_or("").trim_start_matches("## ").to_string();
+    let title = lines
+        .next()
+        .unwrap_or("")
+        .trim_start_matches("## ")
+        .to_string();
     let date = lines.next().unwrap_or("").to_string();
 
     // Skip any empty lines after the date
-    let content = lines.skip_while(|line| line.trim().is_empty())
-                       .collect::<Vec<&str>>()
-                       .join("\n");
+    let content = lines
+        .skip_while(|line| line.trim().is_empty())
+        .collect::<Vec<&str>>()
+        .join("\n");
 
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -126,7 +129,10 @@ fn get_cover_image_html(md_file: &str) -> String {
         let image_path = format!("./images/{}.{}", base_filename, ext);
         if Path::new(&image_path).exists() {
             move_image_to_webpage(&image_path);
-            return format!(r#"<img class="cover-image" src="{}" alt="Cover Image">"#, image_path);
+            return format!(
+                r#"<img class="cover-image" src="{}" alt="Cover Image">"#,
+                image_path
+            );
         }
     }
     String::new()
@@ -140,7 +146,7 @@ fn get_thumbnail_meta_tag(md_file: &str, base_url: &String) -> String {
         let image_path = format!("./images/{}.{}", base_filename, ext);
         if Path::new(&image_path).exists() {
             move_image_to_webpage(&image_path);
-            let thumbnail_url = format!("{}/{}", base_url, image_path.replace("./",""));
+            let thumbnail_url = format!("{}/{}", base_url, image_path.replace("./", ""));
             return format!(r#"<meta property="og:image" content="{}"/>"#, thumbnail_url);
         }
     }
@@ -158,7 +164,14 @@ fn create_html_files(md_files: Vec<String>, is_prod: bool, base_url: String, tit
     for md_file in md_files {
         let content = fs::read_to_string(&md_file).expect("Error reading file");
         let html_content = markdown_to_html(&content, &md_file);
-        let html_content = create_html_template(css_path, &html_content, base_url.clone(), title.clone(), false, &md_file);
+        let html_content = create_html_template(
+            css_path,
+            &html_content,
+            base_url.clone(),
+            title.clone(),
+            false,
+            &md_file,
+        );
         let html_file = md_file.replace(".md", ".html");
         let html_file = html_file.replace("data/", "webpage/");
         fs::write(&html_file, html_content).expect("Error writing HTML file");
@@ -178,24 +191,19 @@ fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_
         if is_prod && md_file == "data/example.md" {
             continue;
         }
-        let article_name = md_file.replace(".md", ".html")
-                                  .replace("data/", "");
+        let article_name = md_file.replace(".md", ".html").replace("data/", "");
         let article_url = format!("{}/{}", base_url, article_name);
         let content = fs::read_to_string(&md_file).expect("Error reading file");
-        let article_name = content.lines()
-                                    .next()
-                                    .unwrap_or("")
-                                    .replace("#", "");
-        let date = content.lines()
-                            .nth(1)
-                            .unwrap_or("")
-                            .to_string();
+        let article_name = content.lines().next().unwrap_or("").replace("#", "");
+        let date = content.lines().nth(1).unwrap_or("").to_string();
         entries.push((article_url, article_name, date));
     }
 
     entries.sort_by(|(_, _, a), (_, _, b)| {
-        let date_a = NaiveDate::parse_from_str(a, "%m-%d-%Y").unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
-        let date_b = NaiveDate::parse_from_str(b, "%m-%d-%Y").unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
+        let date_a = NaiveDate::parse_from_str(a, "%m-%d-%Y")
+            .unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
+        let date_b = NaiveDate::parse_from_str(b, "%m-%d-%Y")
+            .unwrap_or_else(|_| NaiveDate::from_ymd_opt(1970, 1, 1).unwrap());
         date_b.cmp(&date_a)
     });
 
@@ -204,8 +212,8 @@ fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_
             r#"<div class='post'>
                 <span class="index-date">{date}</span>
                 <span class="index-post-title"><a href="{}">{}</a></span>
-            </div>"#, 
-            article_url, 
+            </div>"#,
+            article_url,
             article_name,
             date = date,
         ));
@@ -223,13 +231,20 @@ fn clear_html_files() {
         match entry {
             Ok(path) => {
                 fs::remove_file(path).expect("Error removing file");
-            },
+            }
             Err(e) => println!("{:?}", e),
         }
     }
 }
 
-fn create_html_template(css_path: &str, content: &str, base_url: String, title: String, index: bool, md_file: &str) -> String {
+fn create_html_template(
+    css_path: &str,
+    content: &str,
+    base_url: String,
+    title: String,
+    index: bool,
+    md_file: &str,
+) -> String {
     let container = if index {
         "index-container"
     } else {
@@ -271,9 +286,9 @@ fn create_html_template(css_path: &str, content: &str, base_url: String, title: 
         title = title,
         css_path = css_path,
         content = content,
-        base_url = format!("{}{}",base_url, "/index.html"),
-        about_url = format!("{}{}",base_url, "/about.html"),
-        newsletter_url = format!("{}{}",base_url, "/newsletter.html"),
+        base_url = format!("{}{}", base_url, "/index.html"),
+        about_url = format!("{}{}", base_url, "/about.html"),
+        newsletter_url = format!("{}{}", base_url, "/newsletter.html"),
         container = container,
         thumbnail_meta_tag = thumbnail_meta_tag,
     )
