@@ -29,6 +29,9 @@ impl Config {
             format!("{}/webpage", &current_dir)
         };
 
+        println!("Using base_url: {}", base_url);
+        println!("Using title: {}", title);
+
         Ok(Config {
             is_prod,
             base_url,
