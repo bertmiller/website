@@ -161,11 +161,17 @@ fn create_html_files(md_files: Vec<String>, is_prod: bool, base_url: String, tit
     } else {
         "../webpage/main.css"
     };
+    let mobile_css_path = if is_prod {
+        "./mobile.css"
+    } else {
+        "../webpage/mobile.css"
+    };
     for md_file in md_files {
         let content = fs::read_to_string(&md_file).expect("Error reading file");
         let html_content = markdown_to_html(&content, &md_file);
         let html_content = create_html_template(
             css_path,
+            mobile_css_path,
             &html_content,
             base_url.clone(),
             title.clone(),
@@ -219,7 +225,25 @@ fn create_index_page(md_files: Vec<String>, base_url: String, title: String, is_
         ));
     }
 
-    index_content = create_html_template("./main.css", &index_content, base_url, title, true, "");
+    let css_path = if is_prod {
+        "./main.css"
+    } else {
+        "../webpage/main.css"
+    };
+    let mobile_css_path = if is_prod {
+        "./mobile.css"
+    } else {
+        "../webpage/mobile.css"
+    };
+    index_content = create_html_template(
+        css_path,
+        mobile_css_path,
+        &index_content,
+        base_url,
+        title,
+        true,
+        "",
+    );
     fs::write("./webpage/index.html", index_content).expect("Error writing index file");
 }
 
@@ -239,6 +263,7 @@ fn clear_html_files() {
 
 fn create_html_template(
     css_path: &str,
+    mobile_css_path: &str,
     content: &str,
     base_url: String,
     title: String,
@@ -257,14 +282,16 @@ fn create_html_template(
     };
     format!(
         r#"<!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
-            <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <link rel="preconnect" href="https://fonts.googleapis.com">
             <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
             <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;500;700&display=swap" rel="stylesheet">
             <title>{title}</title>
             <link rel="stylesheet" type="text/css" href="{css_path}">
+            <link rel="stylesheet" type="text/css" href="{mobile_css_path}">
             {thumbnail_meta_tag}
         </head>
         <body>
@@ -291,5 +318,6 @@ fn create_html_template(
         newsletter_url = format!("{}{}", base_url, "/newsletter.html"),
         container = container,
         thumbnail_meta_tag = thumbnail_meta_tag,
+        mobile_css_path = mobile_css_path,
     )
 }
