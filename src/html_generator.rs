@@ -4,6 +4,7 @@ use chrono::NaiveDate;
 use pulldown_cmark::{html::push_html, Options, Parser};
 use std::fs;
 use std::path::Path;
+use tracing::info;
 
 // Convert markdown to HTML
 pub fn markdown_to_html(markdown: &str, md_file: &str, config: &Config) -> String {
@@ -52,7 +53,7 @@ pub fn markdown_to_html(markdown: &str, md_file: &str, config: &Config) -> Strin
 
 // Create HTML files from markdown files
 pub fn create_blog_posts(config: &Config, md_files: Vec<String>) {
-    println!("Creating HTML files");
+    info!("Creating HTML files");
     for md_file in md_files {
         let content = fs::read_to_string(&md_file).expect("Error reading file");
         let html_content = markdown_to_html(&content, &md_file, config);
@@ -77,7 +78,7 @@ pub fn create_blog_posts(config: &Config, md_files: Vec<String>) {
 
 // Create an index page
 pub fn create_index_page(config: &Config, md_files: Vec<String>) {
-    println!("Creating index page");
+    info!("Creating index page");
     let mut index_content = String::new();
     let mut entries: Vec<(String, String, String)> = Vec::new();
 
@@ -100,7 +101,11 @@ pub fn create_index_page(config: &Config, md_files: Vec<String>) {
         }
 
         let article_name = md_file.replace(".md", ".html").replace("data/", "");
-        let article_url = format!("{}/{}", config.base_url, article_name);
+        let article_url = if config.is_prod {
+            format!("/{}", article_name)
+        } else {
+            format!("{}/{}", config.base_url, article_name)
+        };
         let content = fs::read_to_string(&md_file).expect("Error reading file");
         let article_name = content.lines().next().unwrap_or("").replace("#", "");
         let date = content.lines().nth(1).unwrap_or("").to_string();
@@ -178,7 +183,7 @@ fn create_html_template(config: &Config, content: &str, index: bool, md_file: &s
         css_path = config.css_path(),
         mobile_css_path = config.mobile_css_path(),
         content = content,
-        base_url = format!("{}{}", config.base_url, "/index.html"),
+        base_url = format!("{}", config.base_url),
         about_url = format!("{}{}", config.base_url, "/about.html"),
         newsletter_url = format!("{}{}", config.base_url, "/newsletter.html"),
         container = container,

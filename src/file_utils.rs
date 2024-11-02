@@ -2,6 +2,7 @@ use std::fs::create_dir_all;
 use glob::glob;
 use std::{fs, path::Path, sync::mpsc::channel};
 use notify::{RecursiveMode, Watcher};
+use tracing::{info, warn};
 use crate::config::Config;
 use crate::html_generator;
 
@@ -17,11 +18,11 @@ pub fn watch_for_changes(config: &Config) -> Result<(), Box<dyn std::error::Erro
     let config_clone = config.clone();
     let mut watcher = notify::recommended_watcher(move |res| match res {
         Ok(event) => {
-            println!("{:?}", event);
+            info!("{:?}", event);
             let md_files = read_markdown_files(&config_clone.data_dir);
             create_files(&config_clone, md_files);
         }
-        Err(e) => println!("watch error: {:?}", e),
+        Err(e) => warn!("watch error: {:?}", e),
     })?;
 
     watcher.watch(Path::new(&config.data_dir), RecursiveMode::Recursive)?;
@@ -29,7 +30,7 @@ pub fn watch_for_changes(config: &Config) -> Result<(), Box<dyn std::error::Erro
     loop {
         match rx.recv() {
             Ok(_) => {}
-            Err(e) => println!("watch receive error: {:?}", e),
+            Err(e) => warn!("watch receive error: {:?}", e),
         }
     }
 }
@@ -46,14 +47,14 @@ pub fn read_markdown_files(folder: &str) -> Vec<String> {
 
 // clear old HTML files
 pub fn clear_html_files(webpage_dir: &str) {
-    println!("Clearing old files");
+    info!("Clearing old files");
     let pattern = format!("{}/*.html", webpage_dir);
     for entry in glob(&pattern).expect("Failed to read glob pattern") {
         match entry {
             Ok(path) => {
                 fs::remove_file(path).expect("Error removing file");
             }
-            Err(e) => println!("{:?}", e),
+            Err(e) => warn!("{:?}", e),
         }
     }
 }
