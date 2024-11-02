@@ -1,5 +1,6 @@
 use dotenv::dotenv;
 use std::env;
+use tracing::info;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -36,11 +37,11 @@ impl Config {
         let images_dir = env::var("IMAGES_DIR")
             .unwrap_or_else(|_| format!("{}{}", webpage_dir, DEFAULT_IMAGES_DIR));
 
-        println!("Using base_url: {}", base_url);
-        println!("Using title: {}", title);
-        println!("Using data_dir: {}", data_dir);
-        println!("Using webpage_dir: {}", webpage_dir);
-        println!("Using images_dir: {}", images_dir);
+        info!("Using base_url: {}", base_url);
+        info!("Using title: {}", title);
+        info!("Using data_dir: {}", data_dir);
+        info!("Using webpage_dir: {}", webpage_dir);
+        info!("Using images_dir: {}", images_dir);
 
         Ok(Config {
             is_prod,
