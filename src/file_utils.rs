@@ -60,27 +60,62 @@ pub fn clear_html_files(webpage_dir: &str) {
 }
 
 // Helper function to move the image to the ./webpage/images/ directory
-pub fn move_image_to_webpage(image_path: &str, images_dir: &str) {
-    create_dir_all(images_dir).expect("Failed to create target directory");
-    let image_filename = Path::new(image_path).file_name().unwrap().to_str().unwrap();
-    let target_path = format!("{}{}", images_dir, image_filename);
+pub fn move_image_to_webpage(image_path: &str, images_dir_str: &str) {
+    let images_dir = Path::new(images_dir_str);
+    create_dir_all(&images_dir).expect("Failed to create target directory for images");
+    
+    let image_filename = Path::new(image_path).file_name().unwrap_or_else(|| 
+        panic!("Failed to get filename from image_path: {}", image_path)
+    );
+    // Convert OsStr filename to str, panicking if not possible (should be rare for typical image names)
+    let image_filename_str = image_filename.to_str().unwrap_or_else(|| 
+        panic!("Failed to convert image filename to string for path: {:?}", image_filename)
+    );
 
-    if !Path::new(&target_path).exists() {
-        fs::copy(image_path, &target_path).expect("Failed to copy image file");
+    // Correctly join the destination directory path with the image filename
+    let target_path = images_dir.join(image_filename_str);
+    let target_path_display = target_path.display().to_string(); // For logging
+
+    if !target_path.exists() {
+        match fs::copy(image_path, &target_path) {
+            Ok(_) => info!("Successfully copied image from {} to {}", image_path, target_path_display),
+            Err(e) => warn!("Failed to copy image from {} to {}: {}", image_path, target_path_display, e),
+        }
     }
 }
 
 // Helper function to get the cover image HTML
-pub fn get_cover_image_html(md_file: &str, images_dir: &str) -> String {
-    let base_filename = Path::new(md_file).file_stem().unwrap().to_str().unwrap();
+pub fn get_cover_image_html(md_file: &str, config: &Config) -> String {
+    let base_filename = Path::new(md_file).file_stem().unwrap_or_default().to_str().unwrap_or_default();
+    if base_filename.is_empty() {
+        warn!("Could not determine base filename from md_file: {}", md_file);
+        return String::new();
+    }
+
+    let source_images_dir = Path::new(config.images_dir.trim_end_matches('/')); 
+    let webpage_images_dest_dir_str = Path::new(config.webpage_dir.trim_end_matches('/')).join("images").to_str().unwrap_or_default().to_string();
+    if webpage_images_dest_dir_str.is_empty() {
+        warn!("Could not construct webpage_images_dest_dir_str");
+        return String::new();
+    }
+
     let extensions = ["jpg", "jpeg", "png", "gif"];
     for ext in &extensions {
-        let image_path = format!("./images/{}.{}", base_filename, ext);
-        if Path::new(&image_path).exists() {
-            move_image_to_webpage(&image_path, &images_dir);
+        let image_filename_with_ext = format!("{}.{}", base_filename, ext);
+        let source_image_full_path = source_images_dir.join(&image_filename_with_ext);
+
+        if source_image_full_path.exists() {
+            // Ensure webpage_images_dest_dir exists before calling move_image_to_webpage
+            let dest_dir_path = Path::new(&webpage_images_dest_dir_str);
+            if !dest_dir_path.exists() {
+                create_dir_all(&dest_dir_path).expect("Failed to create webpage images destination directory");
+            }
+            move_image_to_webpage(source_image_full_path.to_str().unwrap_or_default(), &webpage_images_dest_dir_str);
+            
+            let html_image_src = Path::new("images").join(image_filename_with_ext);
             return format!(
                 r#"<img class="cover-image" src="{}" alt="Cover Image">"#,
-                image_path
+                html_image_src.to_str().unwrap_or_default()
             );
         }
     }
@@ -88,14 +123,35 @@ pub fn get_cover_image_html(md_file: &str, images_dir: &str) -> String {
 }
 
 // Helper function to get the thumbnail meta tag and move the image
-pub fn get_thumbnail_meta_tag(md_file: &str, base_url: &String, images_dir: &str) -> String {
-    let base_filename = Path::new(md_file).file_stem().unwrap().to_str().unwrap();
+pub fn get_thumbnail_meta_tag(md_file: &str, config: &Config) -> String {
+    let base_filename = Path::new(md_file).file_stem().unwrap_or_default().to_str().unwrap_or_default();
+    if base_filename.is_empty() {
+        warn!("Could not determine base filename for thumbnail from md_file: {}", md_file);
+        return String::new();
+    }
+
+    let source_images_dir = Path::new(config.images_dir.trim_end_matches('/')); 
+    let webpage_images_dest_dir_str = Path::new(config.webpage_dir.trim_end_matches('/')).join("images").to_str().unwrap_or_default().to_string();
+    if webpage_images_dest_dir_str.is_empty() {
+        warn!("Could not construct webpage_images_dest_dir_str for thumbnail");
+        return String::new();
+    }
+    const WEBPAGE_IMAGES_SUBDIR_NAME: &str = "images";
+
     let extensions = ["jpg", "jpeg", "png", "gif"];
     for ext in &extensions {
-        let image_path = format!("./images/{}.{}", base_filename, ext);
-        if Path::new(&image_path).exists() {
-            move_image_to_webpage(&image_path, &images_dir);
-            let thumbnail_url = format!("{}/{}", base_url, image_path.replace("./", ""));
+        let image_filename_with_ext = format!("{}.{}", base_filename, ext);
+        let source_image_full_path = source_images_dir.join(&image_filename_with_ext);
+
+        if source_image_full_path.exists() {
+            let dest_dir_path = Path::new(&webpage_images_dest_dir_str);
+            if !dest_dir_path.exists() {
+                create_dir_all(&dest_dir_path).expect("Failed to create webpage images destination directory");
+            }
+            move_image_to_webpage(source_image_full_path.to_str().unwrap_or_default(), &webpage_images_dest_dir_str);
+
+            let thumbnail_url_path = Path::new(WEBPAGE_IMAGES_SUBDIR_NAME).join(image_filename_with_ext);
+            let thumbnail_url = format!("{}/{}", config.base_url.trim_end_matches('/'), thumbnail_url_path.to_str().unwrap_or_default());
             return format!(r#"<meta property="og:image" content="{}"/>"#, thumbnail_url);
         }
     }

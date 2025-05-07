@@ -53,12 +53,8 @@ impl Config {
         })
     }
 
-    pub fn css_path(&self) -> &'static str {
-        if self.is_prod {
-            "./main.css"
-        } else {
-            "../webpage/main.css"
-        }
+    pub fn css_path(&self) -> String {
+        format!("{}/main.css", self.base_url)
     }
 
     pub fn mobile_css_path(&self) -> &'static str {
