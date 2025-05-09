@@ -6,6 +6,19 @@ use std::fs;
 use std::path::Path;
 use tracing::info;
 
+// Estimate reading time based on word count.
+// Assumes an average reading speed of 200 words per minute.
+fn estimate_reading_time(text: &str) -> u32 {
+    let word_count = text.split_whitespace().count();
+    let wpm = 200;
+    let minutes = (word_count as f64 / wpm as f64).ceil() as u32;
+    if minutes < 1 {
+        1
+    } else {
+        minutes
+    }
+}
+
 // Convert markdown to HTML
 pub fn markdown_to_html(markdown: &str, md_file: &str, config: &Config) -> String {
     // Extract the title (first h2) and date (second line)
@@ -25,7 +38,8 @@ pub fn markdown_to_html(markdown: &str, md_file: &str, config: &Config) -> Strin
             // now remove the ()
             let url = url.trim_start_matches("(").trim_end_matches(")");
             if !url.is_empty() {
-                substack_link_html = format!(r#" / <a href="{}" target="_blank">Substack link</a>"#, url);
+                substack_link_html =
+                    format!(r#" / <a href="{}" target="_blank">Substack</a>"#, url);
             }
         }
     }
@@ -33,7 +47,11 @@ pub fn markdown_to_html(markdown: &str, md_file: &str, config: &Config) -> Strin
     let mut content_lines = markdown.lines();
     content_lines.next(); // Skip title
     content_lines.next(); // Skip date line
-    if markdown.lines().nth(2).map_or(false, |l| l.starts_with("[substack post]")) {
+    if markdown
+        .lines()
+        .nth(2)
+        .map_or(false, |l| l.starts_with("[substack post]"))
+    {
         content_lines.next();
     }
 
@@ -42,6 +60,9 @@ pub fn markdown_to_html(markdown: &str, md_file: &str, config: &Config) -> Strin
         .skip_while(|line| line.trim().is_empty())
         .collect::<Vec<&str>>()
         .join("\n");
+
+    // Estimate reading time based on content
+    let reading_time = estimate_reading_time(&content);
 
     let mut options = Options::empty();
     options.insert(Options::ENABLE_STRIKETHROUGH);
@@ -56,7 +77,7 @@ pub fn markdown_to_html(markdown: &str, md_file: &str, config: &Config) -> Strin
         <div class="post-container">
             <h2>{title}</h2>
             <div class="post-title-separator"></div>
-            <span class="post-date">{date}{substack_link}</span>
+            <span class="post-date">{date} / {reading_time} min read {substack_link}</span>
             {cover_image}
             <div class="post-content">
                 {post_content}
@@ -67,6 +88,7 @@ pub fn markdown_to_html(markdown: &str, md_file: &str, config: &Config) -> Strin
         title = title,
         date = date_line,
         substack_link = substack_link_html,
+        reading_time = reading_time,
         post_content = html_output,
     );
     final_html_output
@@ -108,11 +130,13 @@ pub fn create_index_page(config: &Config, md_files: Vec<String>) {
         let newsletter_path = format!("{}newsletter.md", config.data_dir);
         let example_path = format!("{}example.md", config.data_dir);
         let not_found_path = format!("{}404.md", config.data_dir);
-        
+
         // Remove "./" from the beginning of the paths if present
         let md_file = md_file.strip_prefix("./").unwrap_or(md_file);
         let about_path = about_path.strip_prefix("./").unwrap_or(&about_path);
-        let newsletter_path = newsletter_path.strip_prefix("./").unwrap_or(&newsletter_path);
+        let newsletter_path = newsletter_path
+            .strip_prefix("./")
+            .unwrap_or(&newsletter_path);
         let example_path = example_path.strip_prefix("./").unwrap_or(&example_path);
         let not_found_path = not_found_path.strip_prefix("./").unwrap_or(&not_found_path);
         if md_file == about_path || md_file == newsletter_path || md_file == not_found_path {
@@ -172,17 +196,39 @@ fn create_html_template(config: &Config, content: &str, index: bool, md_file: &s
     };
 
     let about_path = format!("{}about.md", config.data_dir);
-    let about_class_contents = if md_file == (about_path).strip_prefix("./").unwrap_or(&about_path) {
+    let about_class_contents = if md_file == (about_path).strip_prefix("./").unwrap_or(&about_path)
+    {
         "class = about"
-    } else{
+    } else {
         ""
     };
 
     let newsletter_path = format!("{}newsletter.md", config.data_dir);
-    let newsletter_class_contents = if md_file == (newsletter_path).strip_prefix("./").unwrap_or(&newsletter_path) {
+    let newsletter_class_contents = if md_file
+        == (newsletter_path)
+            .strip_prefix("./")
+            .unwrap_or(&newsletter_path)
+    {
         "class = newsletter"
-    } else{
+    } else {
         ""
+    };
+
+    let body_class = if index { "class = no-progress-bar" } else { "" };
+
+    let footer_html = if index {
+        String::new()
+    } else {
+        format!(
+            r#"<footer>
+                <div class="footer-content">
+                    <div class="footer-line"></div>
+                    <p class="footer-text">&copy; {} {}</p>
+                </div>
+            </footer>"#,
+            chrono::Utc::now().format("%Y"), // Get current year
+            "Robert Miller"                  // Your name or site name
+        )
     };
 
     format!(
@@ -199,7 +245,7 @@ fn create_html_template(config: &Config, content: &str, index: bool, md_file: &s
             <link rel="stylesheet" type="text/css" href="{mobile_css_path}">
             {thumbnail_meta_tag}
         </head>
-        <body>
+        <body {body_class}>
             <header>
                 <nav>
                     <div class="nav-bar">
@@ -212,6 +258,7 @@ fn create_html_template(config: &Config, content: &str, index: bool, md_file: &s
             <div class="{container}">
                 {content}
             </div>
+            {footer}
         </body>
         </html>"#,
         title = config.title,
@@ -226,5 +273,6 @@ fn create_html_template(config: &Config, content: &str, index: bool, md_file: &s
         newsletter_class = newsletter_class_contents,
         container = container,
         thumbnail_meta_tag = thumbnail_meta_tag,
+        footer = footer_html,
     )
 }
